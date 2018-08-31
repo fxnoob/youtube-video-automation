@@ -1,0 +1,24 @@
+#!/bin/bash
+
+# NAME:         TTS
+
+simple_google_tts hi "$1/text.txt"  
+audio_temp_dir=$( ls -ltr  /tmp/ | grep '^d' | tail -1 | grep simple_google_tts.* |awk '{print $NF}' )
+cd "/tmp/$audio_temp_dir/"
+audio_files=$( ls -tr )
+echo $audio_files
+cd "$1"
+touch "audio.mp3"
+cd "/tmp/$audio_temp_dir/"
+cat $audio_files >"$1/audio.mp3" 
+cd $1
+cp /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/background_instrumental_low_vol.mp3 back.mp3
+#mixing background to audio
+ffmpeg -y -i audio.mp3 -f lavfi -i amovie=back.mp3:loop=55555  -filter_complex "[0:0][1:0] amix=inputs=2:duration=shortest" -c:a libmp3lame output.mp3
+#creating video from images
+ffmpeg -r 1/5 -i %d.jpg -c:v libx264 -vf fps=25 -pix_fmt yuv420p out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+#adding audio to video(completing the video)
+ffmpeg -i out.mkv -i output.mp3 -codec copy  output_without_intro.mkv 
+#ffmpeg -y -framerate 1/10 -loop 1  -start_number 1 -i $1/%d.jpg -i $1/output.mp3 -pix_fmt yuv420p -c:a copy -c:v h264 -shortest out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+#adding intro video
+ffmpeg -i /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/introduction_video_fxnoob.mkv -i output_without_intro.mkv -i /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/introduction_video_fxnoob.mkv  -filter_complex "[0:v] [0:a] [1:v] [1:a] [2:v] [2:a] concat=n=3:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.mkv

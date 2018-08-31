@@ -1,0 +1,8 @@
+{
+    "require": {
+        "vlucas/phpdotenv": "^2.4",
+        "google/apiclient": "^2.0",
+        "php-ffmpeg/php-ffmpeg": "^0.11.1",
+        "php-ffmpeg/extras": "^0.3.1"
+    }
+}
