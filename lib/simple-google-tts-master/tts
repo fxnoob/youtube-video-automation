@@ -1,24 +1,109 @@
 #!/bin/bash
 
-# NAME:         TTS
+# NAME:         TTS(Text to speech)
 
-simple_google_tts hi "$1/text.txt"  
-audio_temp_dir=$( ls -ltr  /tmp/ | grep '^d' | tail -1 | grep simple_google_tts.* |awk '{print $NF}' )
-cd "/tmp/$audio_temp_dir/"
-audio_files=$( ls -tr )
-echo $audio_files
-cd "$1"
-touch "audio.mp3"
-cd "/tmp/$audio_temp_dir/"
-cat $audio_files >"$1/audio.mp3" 
-cd $1
-cp /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/background_instrumental_low_vol.mp3 back.mp3
-#mixing background to audio
-ffmpeg -y -i audio.mp3 -f lavfi -i amovie=back.mp3:loop=55555  -filter_complex "[0:0][1:0] amix=inputs=2:duration=shortest" -c:a libmp3lame output.mp3
-#creating video from images
-ffmpeg -r 1/5 -i %d.jpg -c:v libx264 -vf fps=25 -pix_fmt yuv420p out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
-#adding audio to video(completing the video)
-ffmpeg -i out.mkv -i output.mp3 -codec copy  output_without_intro.mkv 
-#ffmpeg -y -framerate 1/10 -loop 1  -start_number 1 -i $1/%d.jpg -i $1/output.mp3 -pix_fmt yuv420p -c:a copy -c:v h264 -shortest out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
-#adding intro video
-ffmpeg -i /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/introduction_video_fxnoob.mkv -i output_without_intro.mkv -i /root/Documents/git_projects_fxnoob/youtube_news_video_maker/music/introduction_video_fxnoob.mkv  -filter_complex "[0:v] [0:a] [1:v] [1:a] [2:v] [2:a] concat=n=3:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.mkv
+#### command line params parsing
+###e.g. --path=/root/Desktop
+
+#language which text is to be synthasized in 
+LANG="hi"
+#text file location 
+TEXT_FILE=""
+#path to image files .If not given current path is considered.(text file location must be given saperately) 
+SRCPATH="."
+#music file path
+MUSICFILE=""
+#if video creation is off (ONLYSOUND=1)
+ONLYSOUND=0
+
+init_service(){
+	service mysql start
+}
+
+
+for i in "$@"
+do
+case $i in
+    -i|--init)
+	#initialize services
+	init_service
+    ;;
+    -l|--lang)
+    LANG="${i#*=}"
+    echo "Language has been set to: $LANG"
+    ;;
+    -tf=*|--text-file=*)
+    TEXT_FILE="${i#*=}"
+    if [ ! -f "$TEXT_FILE" ]; then
+    	 echo "Text file path: \"$TEXT_FILE\" does not exist!!"
+    	 exit 
+    fi
+    ;;
+    -p=*|--path=*)
+    SRCPATH="${i#*=}"
+    if [ ! -d "$SRCPATH" ]; then
+    	 echo "Path: \"$SRCPATH\" does not exist!!"
+    	 exit 
+    fi
+    ;;
+    -m=*|--music=*)
+    MUSICFILE="${i#*=}"
+    if [ ! -f "$MUSICFILE" ]; then
+    	 echo "Music file : \"$MUSICFILE\" does not exist!!"
+    	 exit 
+    fi
+    ;;
+    -o=*|--out=*)
+    OUTPATH="${i#*=}"
+    if [ ! -d "$OUTPATH" ]; then
+    	 echo "Output path: \"$OUTPATH\" does not exist!!"
+    	 exit 
+    fi
+    ;;
+    --only-sound=*)
+    ONLYSOUND=1
+    if [ ! -d "$OUTPATH" ]; then
+    	 echo "Output path: \"$OUTPATH\" does not exist!!"
+    	 exit 
+    fi
+    ;;
+    *)
+          # unknown option
+    ;;
+esac
+done
+
+
+run(){ 
+	simple_google_tts "$LANG" "$TEXT_FILE"
+	#find location of the temporary directory  
+	tmpdir=$( dirname $( mktemp -u ) )
+	audio_temp_dir=$( ls -ltr  "$tmpdir/" | grep '^d' | tail -1 | grep simple_google_tts.* |awk '{print $NF}' )
+	cd "$tmpdir/$audio_temp_dir/"
+	audio_files=$( ls -tr )
+	echo $audio_files
+	cd $SRCPATH
+	touch "audio.mp3"
+	cd "$tmpdir/$audio_temp_dir/"
+	cat $audio_files >"$SRCPATH/audio.mp3" 
+	cd $SRCPATH
+	#copy music file to current directory
+	#cp $MUSICFILE back.mp3
+	#mixing background to audio 
+	ffmpeg -y -i audio.mp3 -f lavfi -i amovie=$MUSICFILE:loop=55555  -filter_complex "[0:0][1:0] amix=inputs=2:duration=shortest" -c:a libmp3lame output.mp3
+	#delete background audio file  
+
+	if [ "$ONLYSOUND"!="1" ]; then
+		
+		#creating video from images
+		ffmpeg -r 1/5 -i %d.jpg -c:v libx264 -vf fps=25 -pix_fmt yuv420p out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+		#adding audio to video(completing the video)
+		ffmpeg -i out.mkv -i output.mp3 -codec copy  output_without_intro.mkv 
+		#ffmpeg -y -framerate 1/10 -loop 1  -start_number 1 -i $1/%d.jpg -i $1/output.mp3 -pix_fmt yuv420p -c:a copy -c:v h264 -shortest out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+		#adding intro video
+		ffmpeg -i output_without_intro.mkv -i output_without_intro.mkv -i output_without_intro.mkv  -filter_complex "[0:v] [0:a] [1:v] [1:a] [2:v] [2:a] concat=n=3:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.mkv
+	fi
+}
+
+
+run  
