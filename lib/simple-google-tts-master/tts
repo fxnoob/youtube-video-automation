@@ -15,6 +15,9 @@ SRCPATH="."
 MUSICFILE=""
 #if video creation is off (ONLYSOUND=1)
 ONLYSOUND=0
+#intro video path
+INTROVIDEO=""
+
 
 init_service(){
 	service mysql start
@@ -60,15 +63,18 @@ case $i in
     	 exit 
     fi
     ;;
-    --only-sound=*)
+    -os=*|--only-sound=*)
     ONLYSOUND=1
-    if [ ! -d "$OUTPATH" ]; then
-    	 echo "Output path: \"$OUTPATH\" does not exist!!"
-    	 exit 
+    ;;
+    --intro-video=*)
+    INTROVIDEO="${i#*=}"
+    if [ ! -f "$INTROVIDEO" ]; then
+    	echo "Intro video file path: \"$INTROVIDEO\" does not exist!!"
+    	exit	
     fi
     ;;
     *)
-          # unknown option
+    # unknown option
     ;;
 esac
 done
@@ -92,16 +98,18 @@ run(){
 	#mixing background to audio 
 	ffmpeg -y -i audio.mp3 -f lavfi -i amovie=$MUSICFILE:loop=55555  -filter_complex "[0:0][1:0] amix=inputs=2:duration=shortest" -c:a libmp3lame output.mp3
 	#delete background audio file  
-
-	if [ "$ONLYSOUND"!="1" ]; then
+	rm "audio.mp3"
+	if [ $ONLYSOUND -ne 1 ]; then
 		
 		#creating video from images
-		ffmpeg -r 1/5 -i %d.jpg -c:v libx264 -vf fps=25 -pix_fmt yuv420p out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+		ffmpeg -r 1/5 -i %*.png -c:v libx264 -vf fps=25 -pix_fmt yuv420p out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
 		#adding audio to video(completing the video)
 		ffmpeg -i out.mkv -i output.mp3 -codec copy  output_without_intro.mkv 
 		#ffmpeg -y -framerate 1/10 -loop 1  -start_number 1 -i $1/%d.jpg -i $1/output.mp3 -pix_fmt yuv420p -c:a copy -c:v h264 -shortest out.mkv -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2"
-		#adding intro video
-		ffmpeg -i output_without_intro.mkv -i output_without_intro.mkv -i output_without_intro.mkv  -filter_complex "[0:v] [0:a] [1:v] [1:a] [2:v] [2:a] concat=n=3:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.mkv
+		if [ "$INTROVIDEO"!="" ]; then
+			#adding intro video
+			ffmpeg -i output_without_intro.mkv -i output_without_intro.mkv -i output_without_intro.mkv  -filter_complex "[0:v] [0:a] [1:v] [1:a] [2:v] [2:a] concat=n=3:v=1:a=1 [v] [a]" -map "[v]" -map "[a]" output.mkv
+		fi
 	fi
 }
 
